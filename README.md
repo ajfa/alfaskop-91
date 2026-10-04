@@ -35,6 +35,17 @@ so the whole path runs from power on to a 3270 session:
 
 From power on to the host screen takes about 85 seconds at normal speed.
 
+## On a real mainframe
+
+The emulated host can be swapped for a real one. With the IBM 3705 emulator by
+Edwin Freekenhorst and Henk Stegeman running IBM's NCP, and Hercules running
+MVS 3.8j (TK5), the A91 takes its call, VTAM activates it, and the DU 4110 logs
+on to TSO:
+
+![TSO READY and LISTCAT on the DU 4110](docs/images/tso-listcat.png)
+
+Scripts, setup and the logon steps are in [host3705/](host3705/README.md).
+
 ## Machines
 
 | name | what it is |
@@ -50,6 +61,7 @@ patches/files/                      the same changes split by file, for reading
 driver/a91.cpp, driver/a91du.lay    the driver and the panel layout, as plain files
 tools/                              Lua probes and Python tools used for the work
 docs/NOTES.md                       hardware and firmware notes
+host3705/                           the A91 on the IBM 3705 emulator, Hercules and MVS: scripts and steps
 ```
 
 No Ericsson firmware, ROM or diskette image is included. See [NOTICE.md](NOTICE.md).
@@ -108,7 +120,9 @@ cat gate-result.txt
 PC keys map by position to the Ericsson keyboard. Enter is ENTER, keypad Enter
 is NEW LINE, End is CLEAR, F1 to F12 are PF1 to PF12 and Shift with F1 to F12
 gives PF13 to PF24, Page Up and Page Down are PA1 and PA2, Print Screen is the
-print key and left Alt with the key under Esc is DEV CNCL. There is no printer,
+print key and left Alt with the key under Esc is DEV CNCL. Left Ctrl is RESET:
+key 120 (code `421C`), identified by what it does, since it clears an `X` on
+the status line. There is no printer,
 so the print key gives `X PR FAILURE`; DEV CNCL clears it.
 
 ## The emulated host
@@ -217,8 +231,10 @@ unit. As far as we know they are not published.
 ## Credits
 
 Mattis Lind for the A91 hardware, the EPROM dumps, the diskette images and the
-first version of the driver. Joakim Larsson Edström for the Alfaskop driver in
-MAME that the display unit is built on.
+first version of the driver, and for pointing at the 3705 emulator. Joakim
+Larsson Edström for the Alfaskop driver in MAME that the display unit is built
+on. Edwin Freekenhorst and Henk Stegeman for the IBM 3705 emulator, Rob Prins
+for TK5, and the Hercules developers.
 
 ## License
 

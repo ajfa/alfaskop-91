@@ -1,9 +1,9 @@
 diff --git a/src/mame/ericsson/a91.cpp b/src/mame/ericsson/a91.cpp
-new file mode 100755
-index 00000000..94006969
+new file mode 100644
+index 00000000..c8f765ef
 --- /dev/null
 +++ b/src/mame/ericsson/a91.cpp
-@@ -0,0 +1,1640 @@
+@@ -0,0 +1,1727 @@
 +// license:BSD-3-Clause
 +// copyright-holders:Mattis Lind
 +/*
@@ -19,6 +19,9 @@ index 00000000..94006969
 +	four TCC two-wire lines (selected in the machine configuration).
 +	Line 1 (MK68564 channel A and the X.21 adapter at FF8C00) is connected
 +	to a model of an X.21 network and an SNA host with one 3270 session.
++	With -bitb socket.<address>:<port> the SDLC frames go instead to a line
++	of the IBM 3705 emulator (IBM3705_R5), so a real NCP, VTAM and TSO under
++	Hercules are the host; the X.21 call and the first XID stay modelled.
 +
 +	TODO:
 +	- Verify clocks/dividers, PI/T port wiring, DMA arbitration and IRQ gating.
@@ -46,6 +49,7 @@ index 00000000..94006969
 +#include "machine/z80sio.h"
 +#include "video/mc6845.h"
 +#include "bus/rs232/rs232.h"
++#include "imagedev/bitbngr.h"
 +#include "imagedev/floppy.h"
 +#include "../skeleton/alfaskop_s41_kb.h"
 +#include "screen.h"
@@ -100,6 +104,7 @@ index 00000000..94006969
 +		, m_du_dma(*this, "du_dma")
 +		, m_config(*this, "CONFIG")
 +		, m_sio(*this, "sio")
++		, m_host_link(*this, "host3705")
 +	{ }
 +
 +	void a91(machine_config &config);
@@ -276,6 +281,16 @@ index 00000000..94006969
 +	attotime m_host_poll_time;
 +	std::deque<std::vector<u8>> m_host_out;
 +	std::deque<std::vector<u8>> m_host_unacked;
++
++	// bridge to the line socket of an IBM 3705 emulator (IBM3705_R5) instead of the host model:
++	// frames travel as 7E address control data 47 0F 7E; the call setup and the first XID stay here
++	optional_device<bitbanger_device> m_host_link;
++	TIMER_CALLBACK_MEMBER(bridge_poll);
++	void bridge_from_a91(std::vector<u8> const &frame);
++	emu_timer *m_bridge_timer = nullptr;
++	bool m_bridge = false;
++	bool m_bridge_xid_done = false;
++	std::vector<u8> m_bridge_rx;
 +};
 +
 +void a91_state::machine_start()
@@ -306,6 +321,7 @@ index 00000000..94006969
 +	m_x21_report_timer = timer_alloc(FUNC(a91_state::x21_report_cb), this);
 +	m_host_timer = timer_alloc(FUNC(a91_state::host_poll), this);
 +	m_host_bind_timer = timer_alloc(FUNC(a91_state::host_bind), this);
++	m_bridge_timer = timer_alloc(FUNC(a91_state::bridge_poll), this);
 +	m_x21_clk_timer->adjust(attotime::from_hz(9600 * 2), 0, attotime::from_hz(9600 * 2));
 +	m_x21_dce_timer->adjust(attotime::from_seconds(50), DCE_READY);
 +	if (m_ducpu)
@@ -319,6 +335,11 @@ index 00000000..94006969
 +void a91_state::machine_reset()
 +{
 +	m_boot_vectors = true;
++	m_bridge = m_host_link && m_host_link->exists();
++	m_bridge_xid_done = false;
++	m_bridge_rx.clear();
++	if (m_bridge)
++		m_bridge_timer->adjust(attotime::from_msec(1), 0, attotime::from_msec(1));
 +	m_pgcr = 0;
 +	m_fdc_irq = false;
 +	m_dma_irq = false;
@@ -1057,6 +1078,11 @@ index 00000000..94006969
 +void a91_state::x21_frame_in(std::vector<u8> const &frame)
 +{
 +	LOGX21("%.6f A91 -> %d: %s\n", machine().time().as_double(), int(frame.size()), hexdump(frame.data(), frame.size()));
++	if (m_bridge)
++	{
++		bridge_from_a91(frame);
++		return;
++	}
 +	if (frame.size() < 2 || frame[0] != m_host_addr)
 +		return;
 +	u8 const ctl = frame[1];
@@ -1105,6 +1131,18 @@ index 00000000..94006969
 +{
 +	if (m_dce != DCE_DATA)
 +		return;
++	if (m_bridge)
++	{
++		// the A91 answers DM to everything until it has seen a format 1 XID; a leased NCP line sends none
++		if (!m_bridge_xid_done)
++		{
++			x21_send_frame({ m_host_addr, 0xbf,
++					0x14, 0x16, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x01, 0x09,
++					0x00, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x00, 0x00 });
++			m_host_timer->adjust(attotime::from_seconds(1));
++		}
++		return;
++	}
 +	if (m_sdlc == SDLC_DISC || m_sdlc == SDLC_XID)
 +	{
 +		// format 1 XID from a PU type 4: the A91 accepts SNRM only after one of these
@@ -1140,6 +1178,54 @@ index 00000000..94006969
 +	m_host_wait_final = true;
 +	// no final within a second: poll again
 +	m_host_timer->adjust(attotime::from_seconds(1));
++}
++
++void a91_state::bridge_from_a91(std::vector<u8> const &frame)
++{
++	if (!m_bridge_xid_done)
++	{
++		if (frame.size() >= 2 && (frame[1] & 0xef) == 0xaf)
++		{
++			LOGX21("%.6f BRIDGE XID from the station, frames now go to the 3705\n", machine().time().as_double());
++			m_bridge_xid_done = true;
++		}
++		return;
++	}
++	m_host_link->output(0x7e);
++	for (u8 const b : frame)
++		m_host_link->output(b);
++	m_host_link->output(0x47);
++	m_host_link->output(0x0f);
++	m_host_link->output(0x7e);
++}
++
++TIMER_CALLBACK_MEMBER(a91_state::bridge_poll)
++{
++	u8 buf[1024];
++	u32 const n = m_host_link->input(buf, sizeof(buf));
++	if (!n)
++		return;
++	m_bridge_rx.insert(m_bridge_rx.end(), buf, buf + n);
++	for (;;)
++	{
++		size_t start = 0;
++		while (start < m_bridge_rx.size() && (m_bridge_rx[start] == 0x7e || m_bridge_rx[start] == 0x00 || m_bridge_rx[start] == 0xaa))
++			start++;
++		size_t end = start;
++		while (end + 2 < m_bridge_rx.size() && !(m_bridge_rx[end] == 0x47 && m_bridge_rx[end + 1] == 0x0f && m_bridge_rx[end + 2] == 0x7e))
++			end++;
++		if (end + 2 >= m_bridge_rx.size())
++		{
++			m_bridge_rx.erase(m_bridge_rx.begin(), m_bridge_rx.begin() + start);
++			break;
++		}
++		std::vector<u8> frame(m_bridge_rx.begin() + start, m_bridge_rx.begin() + end);
++		m_bridge_rx.erase(m_bridge_rx.begin(), m_bridge_rx.begin() + end + 3);
++		if (frame.size() >= 2 && m_dce == DCE_DATA && m_bridge_xid_done)
++			x21_send_frame(frame);
++		else
++			LOGX21("%.6f BRIDGE dropped %s\n", machine().time().as_double(), hexdump(frame.data(), frame.size()));
++	}
 +}
 +
 +void a91_state::host_sdlc_send_i(std::vector<u8> const &piu)
@@ -1544,6 +1630,7 @@ index 00000000..94006969
 +{
 +	a91(config);
 +	config.set_default_layout(layout_a91du);
++	BITBANGER(config, m_host_link, 0);
 +
 +	M6800(config, m_ducpu, 19.17_MHz_XTAL / 18);
 +	m_ducpu->set_addrmap(AS_PROGRAM, &a91_state::du_mem_map);

@@ -18,6 +18,23 @@ holders and license.
 
 MAME itself is available at https://github.com/mamedev/mame
 
+## host3705: the IBM 3705 emulator, Hercules, TK5 and IBM software
+
+The scripts in `host3705/` are BSD-3-Clause like the rest of this repository.
+They download and build software that is **not** included here and keeps its
+own license:
+
+* the IBM 3705 emulator, https://github.com/snhstq/IBM3705_R5, by Edwin
+  Freekenhorst and Henk Stegeman (GPL-3.0), including `comm3705.c` for
+  Hercules and the NCP volume `ncpssp.3350`;
+* Hercules, https://github.com/SDL-Hercules-390/hyperion (Q Public License);
+* TK5, the MVS 3.8j turnkey system by Rob Prins, which the user downloads.
+
+MVS 3.8j, VTAM, TSO, the NCP and the other IBM programs on those volumes are
+IBM's. The jobs built by `tk5jobs.py` change members of the user's own TK5
+system; no IBM source or member is copied into this repository.
+`host3705/jcl/ncpgen1.jcl` follows the sample job `NCPGEN` on the NCP volume.
+
 ## Ericsson material
 
 **No Ericsson firmware, ROM image, diskette image or documentation is included
