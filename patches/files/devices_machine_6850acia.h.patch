@@ -1,0 +1,20 @@
+diff --git a/src/devices/machine/6850acia.h b/src/devices/machine/6850acia.h
+index 36f89c92..eafbad22 100644
+--- a/src/devices/machine/6850acia.h
++++ b/src/devices/machine/6850acia.h
+@@ -36,6 +36,7 @@ public:
+ 	void write_rxd(int state);
+ 	void write_rxc(int state);
+ 	void write_txc(int state);
++	void set_tx_gap(int bits) { m_tx_gap = bits; }
+ 
+ protected:
+ 	acia6850_device(const machine_config &mconfig, device_type type, const char *tag, device_t *owner, uint32_t clock);
+@@ -117,6 +118,7 @@ private:
+ 	int m_tx_shift;
+ 	int m_tx_parity;
+ 	int m_tx_counter;
++	int m_tx_gap = 1;
+ 	int m_tx_irq_enable;
+ 
+ 	int m_rxc;

@@ -1,0 +1,171 @@
+diff --git a/src/devices/machine/z80sio.cpp b/src/devices/machine/z80sio.cpp
+index 15561da2..8f7d481f 100644
+--- a/src/devices/machine/z80sio.cpp
++++ b/src/devices/machine/z80sio.cpp
+@@ -341,6 +341,11 @@ inline void z80sio_channel::update_wait_ready()
+ 
+ 	// ready/wait is active low
+ 	m_uart->m_out_wrdy_cb[m_index](ready ? 0 : 1);
++
++	// a character with a special condition (end of frame) is left for the CPU
++	m_uart->m_out_rxdrq_cb[m_index](m_rxrdy_en && (m_rr0 & RR0_RX_CHAR_AVAILABLE) && !(m_rr1 & get_special_rx_mask()));
++	// in a synchronous frame the CPU writes the first character, TxRDY then asks for the rest
++	m_uart->m_out_txdrq_cb[m_index](m_txrdy_en && (m_wr5 & WR5_TX_ENABLE) && get_tx_empty() && m_tx_in_pkt);
+ }
+ 
+ inline bool z80sio_channel::receive_allowed() const
+@@ -983,6 +988,17 @@ z80sio_channel::z80sio_channel(
+ 	// Reset all registers
+ 	m_rr0 = m_rr1 =  0;
+ 	m_wr0 = m_wr1 = m_wr2 = m_wr3 = m_wr4 = m_wr5 = m_wr6 = m_wr7 = 0;
++	// receiver and transmitter state that device_reset does not touch
++	m_dlyd_rxd = false;
++	m_rx_bit_limit = 8;
++	m_rx_sync_fsm = SYNC_FSM_HUNT;
++	m_rx_one_cnt = 0;
++	m_rx_sync_sr = m_rx_crc_delay = 0;
++	m_rx_crc = 0;
++	m_rx_crc_en = m_rx_parity = false;
++	m_tx_phase = m_tx_in_pkt = false;
++	m_tx_forced_sync = true;
++	m_tx_delay = m_all_sent_delay = 0;
+ }
+ 
+ z80sio_channel::z80sio_channel(const machine_config &mconfig, const char *tag, device_t *owner, uint32_t clock)
+@@ -1159,6 +1175,8 @@ void mk68564_channel::device_reset()
+ 	z80sio_channel::device_reset();
+ 
+ 	m_tx_auto_enable = false;
++	m_rxrdy_en = false;
++	m_txrdy_en = false;
+ 	m_brg_tc = 0;
+ 	m_brg_control = 0;
+ 	m_brg_state = false;
+@@ -1244,7 +1262,8 @@ void z80sio_channel::sync_tx_sr_empty()
+ 		LOGBIT("tx forced = %d\n" , m_tx_forced_sync);
+ 		m_tx_forced_sync = false;
+ 
+-		if (!(m_rr0 & RR0_TX_UNDERRUN))
++		// a sync forced by enabling the transmitter is no underrun while a character waits
++		if (!(m_rr0 & RR0_TX_UNDERRUN) && (m_rr0 & RR0_TX_BUFFER_EMPTY))
+ 		{
+ 			m_rr0 |= RR0_TX_UNDERRUN;
+ 			trigger_ext_int();
+@@ -1259,7 +1278,11 @@ void z80sio_channel::sync_tx_sr_empty()
+ 			m_tx_flags = 0;
+ 			set_tx_empty (false , (m_rr0 & RR0_TX_BUFFER_EMPTY) != 0);
+ 		}
++		// a flag sent ahead of a character already written does not end that frame
++		bool const pending = m_tx_in_pkt && !(m_rr0 & RR0_TX_BUFFER_EMPTY);
+ 		tx_setup_idle();
++		if (pending)
++			m_tx_in_pkt = true;
+ 	}
+ 	else if (!(m_rr0 & RR0_TX_BUFFER_EMPTY))
+ 	{
+@@ -1706,6 +1729,9 @@ void z80sio_channel::do_sioreg_wr0(uint8_t data)
+ void z80sio_channel::do_sioreg_wr1(uint8_t data)
+ {
+ /* TODO: implement vector modifications when WR1 bit D2 is changed */
++	// selecting interrupt on first character arms it, as the Enable INT on Next Rx Character command does
++	if ((data & WR1_RX_INT_MODE_MASK) == WR1_RX_INT_FIRST && (m_wr1 & WR1_RX_INT_MODE_MASK) != WR1_RX_INT_FIRST)
++		m_rx_first = true;
+ 	m_wr1 = data;
+ 	LOGSETUP("Z80SIO \"%s\" Channel %c :\n", owner()->tag(), 'A' + m_index);
+ 	LOGSETUP(" - External Interrupt Enable %u\n", (data & WR1_EXT_INT_ENABLE) ? 1 : 0);
+@@ -2694,6 +2720,7 @@ uint8_t mk68564_channel::modectl_r()
+ void mk68564_channel::modectl_w(uint8_t data)
+ {
+ 	do_sioreg_wr4(data);
++	update_dtr_rts_break();
+ }
+ 
+ 
+@@ -2702,7 +2729,7 @@ void mk68564_channel::modectl_w(uint8_t data)
+ //-------------------------------------------------
+ uint8_t mk68564_channel::intctl_r()
+ {
+-	return m_wr1 | (m_wr5 & WR5_CRC16 ? 0x80 : 0);
++	return m_wr1 | (m_rxrdy_en ? 0x20 : 0) | (m_txrdy_en ? 0x40 : 0) | (m_wr5 & WR5_CRC16 ? 0x80 : 0);
+ }
+ 
+ 
+@@ -2716,8 +2743,9 @@ void mk68564_channel::intctl_w(uint8_t data)
+ 	else
+ 		m_wr5 &= ~WR5_CRC16;
+ 
+-	// TODO: bits 5 and 6 are independent RxRDY and WxRDY enables
+-	do_sioreg_wr1(data & 0x7f);
++	m_rxrdy_en = BIT(data, 5);
++	m_txrdy_en = BIT(data, 6);
++	do_sioreg_wr1(data & 0x1f);
+ }
+ 
+ 
+@@ -2794,8 +2822,7 @@ uint8_t mk68564_channel::xmtctl_r()
+ 		xmtctl |= 0x10;
+ 	if (m_tx_auto_enable)
+ 		xmtctl |= 0x20;
+-	xmtctl |= (m_wr5 & 0x40) << 1;
+-	xmtctl |= (m_wr5 & 0x80) >> 1;
++	xmtctl |= (m_wr5 & WR5_TX_WORD_LENGTH_MASK) << 1;
+ 	return xmtctl;
+ }
+ 
+@@ -2812,10 +2839,11 @@ void mk68564_channel::xmtctl_w(uint8_t data)
+ 		(BIT(data, 2) ? WR5_DTR : 0) |
+ 		(BIT(data, 3) ? WR5_TX_CRC_ENABLE : 0) |
+ 		(BIT(data, 4) ? WR5_SEND_BREAK : 0) |
+-		(data & 0x40) << 1 |
+-		(data & 0x80) >> 1 |
++		(data & 0xc0) >> 1 |
+ 		(m_wr5 & WR5_CRC16);
+ 	do_sioreg_wr5(control);
++	update_dtr_rts_break();
++	transmit_enable();
+ 
+ 	m_tx_auto_enable = BIT(data, 5);
+ }
+@@ -2883,6 +2911,42 @@ void mk68564_device::vectrg_w(uint8_t data)
+ }
+ 
+ 
++//-------------------------------------------------
++//  read_vector - the MK68564 modifies V2-V0 when
++//  either channel's INTCTL has status affects
++//  vector: B transmit, external, receive, special,
++//  then the same four for A
++//-------------------------------------------------
++uint8_t mk68564_device::read_vector()
++{
++	uint8_t vec = m_chanB->m_wr2;
++	if (!((m_chanA->m_wr1 | m_chanB->m_wr1) & WR1_STATUS_VECTOR))
++		return vec;
++	vec &= 0xf8U;
++
++	int const *const prio = interrupt_priorities();
++	for (int i = 0; std::size(m_int_state) > i; ++i)
++	{
++		if (m_int_state[prio[i]] & Z80_DAISY_INT)
++		{
++			int const ch = prio[i] / 3;
++			z80sio_channel const &chan = ch ? *m_chanB : *m_chanA;
++			uint8_t const base = ch ? 0x00U : 0x04U;
++			switch (prio[i] % 3)
++			{
++			case z80sio_channel::INT_TRANSMIT:
++				return vec | base;
++			case z80sio_channel::INT_EXTERNAL:
++				return vec | base | 0x01U;
++			default:
++				return vec | base | ((chan.m_rr1 & chan.get_special_rx_mask()) ? 0x03U : 0x02U);
++			}
++		}
++	}
++	return vec | 0x06U;
++}
++
++
+ //-------------------------------------------------
+ //  read - 68000 compatible bus read
+ //-------------------------------------------------

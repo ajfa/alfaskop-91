@@ -1,0 +1,13 @@
+diff --git a/src/devices/machine/mc6852.h b/src/devices/machine/mc6852.h
+index c7d0a3a6..6d7bf5d9 100644
+--- a/src/devices/machine/mc6852.h
++++ b/src/devices/machine/mc6852.h
+@@ -84,6 +84,8 @@ protected:
+ 	virtual void rcv_complete() override;
+ 
+ private:
++	void update_irq();
++
+ 	enum
+ 	{
+ 		S_IRQ = 0x80,

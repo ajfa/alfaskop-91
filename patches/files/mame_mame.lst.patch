@@ -1,0 +1,12 @@
+diff --git a/src/mame/mame.lst b/src/mame/mame.lst
+index 3dffc57b..295599b5 100644
+--- a/src/mame/mame.lst
++++ b/src/mame/mame.lst
+@@ -49532,3 +49532,7 @@ iq151
+ 
+ @source:zvt/pp01.cpp
+ pp01
++
++@source:ericsson/a91.cpp
++a91
++a91du

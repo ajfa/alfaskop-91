@@ -1,0 +1,22 @@
+diff --git a/src/devices/machine/z80sio.h b/src/devices/machine/z80sio.h
+index 193a2165..d0b9b2a3 100644
+--- a/src/devices/machine/z80sio.h
++++ b/src/devices/machine/z80sio.h
+@@ -319,6 +319,8 @@ protected:
+ 	bool m_rx_parity;   // accumulated parity
+ 
+ 	bool m_rx_first;    // first character received
++	bool m_rxrdy_en = false;   // MK68564 RxRDY/TxRDY DMA request outputs
++	bool m_txrdy_en = false;
+ 
+ 	int m_rxd;
+ 
+@@ -631,6 +633,8 @@ protected:
+ 	// device_t implementation
+ 	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
+ 
++	virtual uint8_t read_vector() override;
++
+ private:
+ 	void vectrg_w(uint8_t data);
+ };

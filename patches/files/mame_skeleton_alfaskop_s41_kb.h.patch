@@ -1,0 +1,37 @@
+diff --git a/src/mame/skeleton/alfaskop_s41_kb.h b/src/mame/skeleton/alfaskop_s41_kb.h
+index eefa8aca..3686b894 100644
+--- a/src/mame/skeleton/alfaskop_s41_kb.h
++++ b/src/mame/skeleton/alfaskop_s41_kb.h
+@@ -23,6 +23,11 @@ public:
+ 	//void hold_w(int state);
+ 	void rst_line_w(int state);
+ 
++	// present the ROM-ID of a KBU 4143 (E34058 7037) instead of the 4140's, for software that knows only the 4143
++	void set_4143_identity(bool state) { m_4143_identity = state; }
++	// the PC has no PF13-PF24: with Shift held, the PF1-PF12 keys press the top row (PF13-PF24) instead
++	void set_shift_pf13(bool state) { m_shift_pf13 = state; }
++
+ protected:
+ 	virtual void device_start() override ATTR_COLD;
+ 	virtual void device_add_mconfig(machine_config &config) override ATTR_COLD;
+@@ -31,7 +36,7 @@ protected:
+ 
+ 	required_device<m6802_cpu_device> m_mcu;
+ 	required_device<mc6846_device> m_mc6846;
+-	required_ioport_array<6>       m_rows;
++	required_ioport_array<8>       m_rows;
+ 	devcb_write_line               m_txd_cb; // Callback for KBD-> S41
+ 	devcb_write8                   m_leds_cb; // Callback for all 8 leds -> layout
+ 
+@@ -41,8 +46,11 @@ protected:
+ 	uint16_t m_col_select;
+ 	uint8_t m_p1;
+ 	uint8_t m_leds;
++	bool    m_4143_identity = false;
++	bool    m_shift_pf13 = false;
+ 
+ 	void alfaskop_s41_kb_mem(address_map &map) ATTR_COLD;
++	uint8_t read_rows();
+ };
+ 
+ #endif // MAME_SKELETON_ALFASKOP_S41_KB_H

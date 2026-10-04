@@ -1,0 +1,13 @@
+diff --git a/src/devices/machine/68230pit.cpp b/src/devices/machine/68230pit.cpp
+index 0577d63d..2f9b8dda 100644
+--- a/src/devices/machine/68230pit.cpp
++++ b/src/devices/machine/68230pit.cpp
+@@ -107,6 +107,8 @@ void pit68230_device::device_start()
+ 	// Timers
+ 	pit_timer = timer_alloc(FUNC(pit68230_device::tick_clock), this);
+ 
++	m_pail = m_pbil = m_pcil = 0;
++
+ 	// state saving
+ 	save_item(NAME(m_pgcr));
+ 	save_item(NAME(m_psrr));

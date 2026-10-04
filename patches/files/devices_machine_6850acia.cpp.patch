@@ -1,0 +1,121 @@
+diff --git a/src/devices/machine/6850acia.cpp b/src/devices/machine/6850acia.cpp
+index 625f5ba6..047dab15 100644
+--- a/src/devices/machine/6850acia.cpp
++++ b/src/devices/machine/6850acia.cpp
+@@ -415,37 +415,7 @@ void acia6850_device::write_rxc(int state)
+ 						if ((m_rx_bits == m_bits && m_parity == PARITY_NONE) ||
+ 							(m_rx_bits == (m_bits + 1) && m_parity != PARITY_NONE))
+ 						{
+-							if (m_status & SR_RDRF)
+-							{
+-								m_overrun_pending = true;
+-							}
+-							else
+-							{
+-								/// TODO: find out if this is the correct place to calculate parity
+-								if (m_parity == PARITY_ODD)
+-								{
+-									m_rx_parity = !m_rx_parity;
+-								}
+-
+-								if (m_parity != PARITY_NONE && m_rx_parity)
+-								{
+-									m_status |= SR_PE;
+-								}
+-								else
+-								{
+-									m_status &= ~SR_PE;
+-								}
+-
+-								m_rdr = m_rx_shift;
+-
+-								if (m_bits == 7 && m_parity != PARITY_NONE)
+-								{
+-									m_rdr &= 0x7f;
+-								}
+-
+-								m_status |= SR_RDRF;
+-							}
+-
++							// the character is transferred to the RDR at the stop bit
+ 							m_rx_state = STATE_STOP;
+ 						}
+ 					}
+@@ -458,13 +428,43 @@ void acia6850_device::write_rxc(int state)
+ 
+ 						LOG("MC6850 '%s': RX STOP BIT\n", tag());
+ 
+-						if (!m_rxd)
++						if (m_status & SR_RDRF)
+ 						{
+-							m_status |= SR_FE;
++							m_overrun_pending = true;
+ 						}
+ 						else
+ 						{
+-							m_status &= ~SR_FE;
++							if (m_parity == PARITY_ODD)
++							{
++								m_rx_parity = !m_rx_parity;
++							}
++
++							if (m_parity != PARITY_NONE && m_rx_parity)
++							{
++								m_status |= SR_PE;
++							}
++							else
++							{
++								m_status &= ~SR_PE;
++							}
++
++							if (!m_rxd)
++							{
++								m_status |= SR_FE;
++							}
++							else
++							{
++								m_status &= ~SR_FE;
++							}
++
++							m_rdr = m_rx_shift;
++
++							if (m_bits == 7 && m_parity != PARITY_NONE)
++							{
++								m_rdr &= 0x7f;
++							}
++
++							m_status |= SR_RDRF;
+ 						}
+ 
+ 						/// TODO: find out if 6850 only waits for 1 STOP bit when receiving
+@@ -497,10 +497,19 @@ void acia6850_device::write_txc(int state)
+ 			switch (m_tx_state)
+ 			{
+ 			case STATE_START:
+-				m_tx_counter = 0;
+-
++				/* EXPERIMENT (Alfaskop keyboard link): a character queued
++				   behind a finishing frame does not start back-to-back;
++				   it waits until the line has idled for one full bit
++				   time.  A write into an idle transmitter still starts
++				   immediately (counter is left saturated below), so
++				   request/response traffic is unaffected - only chained
++				   multi-byte bursts acquire the 1-bit gap. */
+ 				if (!(m_status & SR_TDRE) && !(m_status & SR_CTS))
+ 				{
++					if (m_tx_counter < m_divide * m_tx_gap)
++						break;
++					m_tx_counter = 0;
++
+ 					LOG("MC6850 '%s': TX DATA %x\n", tag(), m_tdr);
+ 
+ 					m_tx_state = STATE_DATA;
+@@ -515,6 +524,8 @@ void acia6850_device::write_txc(int state)
+ 				}
+ 				else
+ 				{
++					m_tx_counter = m_divide * m_tx_gap;
++
+ 					/// TODO: find out if break stops transmitter
+ 					output_txd(!m_brk);
+ 				}

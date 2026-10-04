@@ -1,0 +1,30 @@
+diff --git a/src/devices/machine/mc6846.cpp b/src/devices/machine/mc6846.cpp
+index 26c42d8a..2bd2845c 100644
+--- a/src/devices/machine/mc6846.cpp
++++ b/src/devices/machine/mc6846.cpp
+@@ -64,6 +64,14 @@ void mc6846_device::device_start()
+ 	m_interval = timer_alloc(FUNC(mc6846_device::timer_expire), this);
+ 	m_one_shot = timer_alloc(FUNC(mc6846_device::timer_one_shot), this);
+ 
++	m_csr = 0;
++	m_pcr = 0x80;
++	m_ddr = m_pdr = 0;
++	m_tcr = 1;
++	m_cp1 = m_cp2 = m_cp2_cpu = 0;
++	m_cto = 0;
++	m_old_cif = m_old_cto = 0;
++
+ 	save_item(NAME(m_csr));
+ 	save_item(NAME(m_pcr));
+ 	save_item(NAME(m_ddr));
+@@ -506,7 +514,9 @@ void mc6846_device::set_input_cp2(int data)
+ 		return;
+ 	m_cp2 = data;
+ 	LOG( "%f: mc6846 input CP2 set to %i\n", machine().time().as_double(), data );
+-	if (m_pcr & 0x20)
++	/* PCR bit 5 = 0 selects CP2 as an interrupt INPUT (bit 5 = 1 makes it an
++	   output); the edge flag can only latch in input mode */
++	if (!(m_pcr & 0x20))
+ 	{
+ 		if (( data &&  (m_pcr & 0x10)) || (!data && !(m_pcr & 0x10)))
+ 		{
