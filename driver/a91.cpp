@@ -1185,12 +1185,12 @@ void a91_state::bridge_from_a91(std::vector<u8> const &frame)
 		}
 		return;
 	}
-	m_host_link->output(0x7e);
-	for (u8 const b : frame)
-		m_host_link->output(b);
-	m_host_link->output(0x47);
-	m_host_link->output(0x0f);
-	m_host_link->output(0x7e);
+	// one write per frame: the 3705 hands each read to its scanner, and a frame split across reads breaks
+	std::vector<u8> out{ 0x7e };
+	out.insert(out.end(), frame.begin(), frame.end());
+	out.insert(out.end(), { 0x47, 0x0f, 0x7e });
+	if (m_host_link->exists())
+		m_host_link->fwrite(out.data(), out.size());
 }
 
 TIMER_CALLBACK_MEMBER(a91_state::bridge_poll)

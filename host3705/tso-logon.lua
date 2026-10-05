@@ -53,11 +53,15 @@ T = emu.add_machine_frame_notifier(function()
 		if locked then press(reset, t) end
 		go("pf3")
 	elseif state == "pf3" and t >= t_state + 4 then
-		if s:find("USERID", 1, true) then m.natkeyboard:post("HERC01\r"); go("userid")
-		elseif locked then press(reset, t); t_state = t
-		else press(pf3, t); t_state = t + 8 end
-	elseif state == "userid" and t >= t_state + 3 and s:find("PASSWORD", 1, true) then
-		m.natkeyboard:post("CUL8TR\r"); go("password")
+		if locked then press(reset, t); t_state = t
+		elseif s:find("USERID", 1, true) then m.natkeyboard:post("HERC01\r"); go("userid")
+		else press(pf3, t); t_state = t + 16 end
+	elseif state == "userid" and t >= t_state + 3 then
+		if s:find("PASSWORD", 1, true) then m.natkeyboard:post("CUL8TR\r"); go("password")
+		elseif locked and t >= t_state + 8 then press(reset, t); t_state = t
+		elseif not locked and t >= t_state + 12 and not s:find("HERC01", 1, true) then
+			m.natkeyboard:post("HERC01\r"); t_state = t
+		end
 	elseif state == "password" and t >= t_state + 3 then
 		if s:find("Welcome", 1, true) then snapshot("welcome") end
 		if s:find("READY", 1, true) then

@@ -44,7 +44,9 @@ on to TSO:
 
 ![TSO READY and LISTCAT on the DU 4110](docs/images/tso-listcat.png)
 
-Scripts, setup and the logon steps are in [host3705/](host3705/README.md).
+Scripts, setup and the logon steps are in [host3705/](host3705/README.md), for
+Linux and for Windows, with the fixes to the 3705 emulator that made the chain
+reliable.
 
 ## Machines
 

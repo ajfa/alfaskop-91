@@ -14,39 +14,66 @@ A91_DISKS=${A91_DISKS:-.}                  # directory with A91R4A_1.IMD and A91
 LOG=$RUN/herc.log
 mkdir -p "$RUN"
 
+# pids of what these scripts start: the 3705 and Hercules by their binaries, the helpers that keep their
+# input open by their working directory (never anything else of the same name)
+our_pids() {
+	local want=$1 d pid exe cwd
+	local i3705_bin hercules_bin i3705_dir run_dir
+	i3705_bin=$(readlink -f "$I3705/BIN/i3705"); hercules_bin=$(readlink -f "$HERC/bin/hercules")
+	i3705_dir=$(readlink -f "$I3705"); run_dir=$(readlink -f "$RUN")
+	for d in /proc/[0-9]*; do
+		pid=${d#/proc/}
+		[ "$pid" = $$ ] && continue
+		exe=$(readlink "$d/exe" 2>/dev/null); cwd=$(readlink "$d/cwd" 2>/dev/null)
+		case "$want:$exe:$cwd" in
+			3705:"$i3705_bin":*|3705:*/tail:"$i3705_dir") echo "$pid" ;;
+			mvs:"$hercules_bin":*|mvs:*/sleep:"$run_dir") echo "$pid" ;;
+		esac
+	done
+}
+
 start_3705() {
-	pkill -x i3705 2>/dev/null || true; sleep 1
-	(cd "$I3705" && nohup bash -c "tail -f /dev/null | stdbuf -oL -eL ./BIN/i3705 3705-128k.cnf" > "$RUN/i3705.log" 2>&1 &)
+	stop_3705
+	(cd "$I3705" && I3705_LINE_ADDR=127.0.0.1 nohup bash -c "tail -f /dev/null | stdbuf -oL -eL ./BIN/i3705 3705-128k.cnf" \
+		> "$RUN/i3705.log" 2>&1 &)
 	for _ in $(seq 1 20); do grep -q "Line-0 ready" "$RUN/i3705.log" 2>/dev/null && return 0; sleep 1; done
 	echo "i3705 did not start, see $RUN/i3705.log" >&2; return 1
 }
 
-# the address the 3705 listens on for its lines (it binds them to eth0, not to localhost)
+# the address the 3705 listens on for its lines (127.0.0.1, from I3705_LINE_ADDR)
 line_address() {
 	grep -o "Using TCP network Address [0-9.]*" "$RUN/i3705.log" | awk '{print $NF}'
 }
 
 start_mvs() {
 	[ -p "$RUN/herc.in" ] || mkfifo "$RUN/herc.in"
-	pkill -f "sleep 2147483647" 2>/dev/null || true
-	(nohup sleep 2147483647 > "$RUN/herc.in" 2>/dev/null &)
+	(cd "$RUN" && nohup sleep 2147483647 > "$RUN/herc.in" 2>/dev/null &)
 	: > "$LOG"
-	(cd "$TK5" && PATH=$HERC/bin:$PATH LD_LIBRARY_PATH=$HERC/lib:$HERC/lib/hercules HERCULES_RC=scripts/ipl.rc \
-		nohup hercules -d -f conf/tk5.cnf < "$RUN/herc.in" > "$LOG" 2>&1 &)
+	(cd "$TK5" && LD_LIBRARY_PATH=$HERC/lib:$HERC/lib/hercules HERCULES_RC=scripts/ipl.rc \
+		nohup "$HERC/bin/hercules" -d -f conf/tk5.cnf < "$RUN/herc.in" > "$LOG" 2>&1 &)
 }
 
 stop_mvs() {
-	pgrep -f "hercules -d -f conf/tk5.cnf" > /dev/null || return 0
-	echo quit > "$RUN/herc.in"
-	for _ in $(seq 1 30); do pgrep -f "hercules -d -f conf/tk5.cnf" > /dev/null || break; sleep 2; done
-	pkill -f "hercules -d -f conf/tk5.cnf" 2>/dev/null || true
-	pkill -f "sleep 2147483647" 2>/dev/null || true
+	local hercules_bin
+	hercules_bin=$(readlink -f "$HERC/bin/hercules")
+	if our_pids mvs | xargs -r -I{} readlink /proc/{}/exe | grep -qxF "$hercules_bin"; then
+		echo quit > "$RUN/herc.in"
+		for _ in $(seq 1 30); do
+			our_pids mvs | xargs -r -I{} readlink /proc/{}/exe | grep -qxF "$hercules_bin" || break
+			sleep 2
+		done
+	fi
+	our_pids mvs | xargs -r kill 2>/dev/null || true
 	return 0
 }
 
 stop_3705() {
-	pkill -x i3705 2>/dev/null || true; sleep 1
-	pkill -f "tail -f /dev/null" 2>/dev/null || true
+	local i3705_bin p
+	i3705_bin=$(readlink -f "$I3705/BIN/i3705")
+	# the 3705 first, then what keeps its input open
+	for p in $(our_pids 3705); do [ "$(readlink /proc/$p/exe 2>/dev/null)" = "$i3705_bin" ] && kill "$p" 2>/dev/null; done
+	sleep 1
+	our_pids 3705 | xargs -r kill 2>/dev/null || true
 }
 
 # MVS console command, e.g. mvs "v net,act,id=N16A"; a Hercules command without the slash: herc "devlist"

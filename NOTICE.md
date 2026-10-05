@@ -35,6 +35,14 @@ IBM's. The jobs built by `tk5jobs.py` change members of the user's own TK5
 system; no IBM source or member is copied into this repository.
 `host3705/jcl/ncpgen1.jcl` follows the sample job `NCPGEN` on the NCP volume.
 
+The scripts in `host3705/patches/` change code of the IBM 3705 emulator and of
+its `comm3705.c`, and are offered under the GPL-3.0 of that project. The
+stand-ins in `host3705/windows/shim/` and `host3705/windows/mingw_shim.h` are
+BSD-3-Clause like the rest. `host3705/windows/build-windows.sh` builds against
+the Windows Hercules that comes with TK5 and the Hercules 4.9.1 headers, and
+copies MSYS2's `msys-2.0.dll` next to the 3705 emulator; none of them is
+included here.
+
 ## Ericsson material
 
 **No Ericsson firmware, ROM image, diskette image or documentation is included

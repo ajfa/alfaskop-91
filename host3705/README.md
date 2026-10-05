@@ -32,8 +32,8 @@ DU 4110 -- two-wire line -- Alfaskop 91 (MAME a91du)
 
 ## What you need
 
-* Linux on x86-64. This was tested on Ubuntu 22.04 under WSL2. The 3705
-  emulator is Linux software.
+* Linux on x86-64. This was tested on Ubuntu 22.04 under WSL2, also limited
+  to two CPUs and 4 GB of memory. Windows is covered further down.
 * `git gcc make libncurses-dev libbsd-dev autoconf automake libtool cmake
   flex gawk m4 zlib1g-dev libbz2-dev unzip python3`.
 * The `a91` MAME binary built from this repository, the ROMs and the two
@@ -54,7 +54,8 @@ Everything is built and unpacked under `work/` next to the scripts, unless
 This builds the 3705 emulator from <https://github.com/snhstq/IBM3705_R5>
 (commit `73994e8`) and Hercules from
 <https://github.com/SDL-Hercules-390/hyperion> (tag `Release_4.6`) with the
-`comm3705.c` that comes with the 3705 emulator. Then it unpacks TK5, copies
+`comm3705.c` that comes with the 3705 emulator, both patched with the scripts
+in `patches/` (see "The patches"). Then it unpacks TK5, copies
 the NCP volume `ncpssp.3350` into it at 244, comments out TK5's simulated 3705s
 at 660 to 66B and puts the emulated one at 660. It takes about ten minutes.
 
@@ -89,7 +90,7 @@ The A91 opens in a window after the NCP is loaded. Log on like this:
 | on the screen | press |
 |---|---|
 | the VTAM logon screen, `SYS OP` on the status line | type `LOGON APPLID(TSO) LOGMODE(MHP3278E)`, Enter |
-| `MY JOB` and `X 443` on the status line, nothing else | Left Ctrl (RESET), then F3 (PF3) |
+| `MY JOB` and `X 443` on the status line, nothing else | Left Ctrl (RESET), then F3 (PF3); again if an `X` comes back |
 | `IKJ56700A ENTER USERID -` | `HERC01`, Enter |
 | `ENTER CURRENT PASSWORD FOR HERC01-` | `CUL8TR`, Enter |
 | the welcome banner and `***` | Enter |
@@ -138,10 +139,50 @@ there; it has not been seen.
 The X.21 call stays modelled in the driver, as does one more thing: the A91
 answers DM to everything until it has seen a format 1 XID, and an NCP on a
 leased line never sends one. So the bridge sends that XID, waits for the A91's
-reply and from then on passes every frame through.
+reply and from then on passes every frame through, each in a single write.
 
-The 3705 emulator binds its line sockets to the address of `eth0`, not to
-localhost. `run.sh` reads that address from the 3705's log.
+Unpatched, the 3705 emulator binds its line sockets to the address of the
+first network interface and its channel to every interface. With
+`patches/i3705-line-address.py` and `I3705_LINE_ADDR=127.0.0.1`, which
+`common.sh` sets, everything stays on localhost.
+
+## The patches
+
+`prepare.sh` applies three scripts to the 3705 emulator and to its
+`comm3705.c`. They came out of porting the chain to Windows, where TCP joins
+and splits data differently, but the first two also fix failures that showed
+on Linux now and then.
+
+`channel-races.py` keeps both ends of the channel and the line reading what
+was meant for them:
+
+* The 3705's scanner took the end of every read from a line socket as the end
+  of a frame. When two frames from the A91 arrived together they became one,
+  and a frame that arrived in two pieces was cut short; the session then
+  failed once in a few logons. Each read now hands the scanner exactly one
+  frame, up to its closing `47 0F 7E`.
+* The 3705 read the 8-byte channel command with a read as big as its buffer,
+  and took the write data with it when both arrived together; it now reads 8
+  bytes. It waited for the write data until `FIONREAD` reported exactly the
+  count, which on Windows may never happen; it now reads the count in a loop.
+* `comm3705.c` read the sense byte with a receive of up to 256 bytes and could
+  swallow the status byte that follows; it now reads one.
+* Accepted sockets are made blocking, as Linux gives them. On Windows they
+  inherit non-blocking mode, and the device number read on connect came back
+  empty.
+* The 3705's channel loop never slept and kept a whole core busy; a pass with
+  nothing to do now sleeps 100 microseconds.
+
+`read-length.py` changes the channel protocol for READ. The 3705 sends the
+data and then a status byte, and `comm3705.c` cannot tell where the data ends
+when both arrive together. Now the 3705 sends the length first. Both ends must
+carry this patch, which is why `prepare.sh` patches the `comm3705.c` it
+builds Hercules with.
+
+`i3705-line-address.py` is the address setting described under "The bridge".
+
+With these, the `debug=yes` on the channel device is no longer needed; it
+only slowed things down enough to hide the races.
 
 ## Rough edges
 
@@ -158,10 +199,52 @@ localhost. `run.sh` reads that address from the 3705's log.
   so it is not the A91.
 * A session that hangs can leave `TSO0001` behind and block the next logons.
   `run.sh` IPLs MVS every time, which clears it.
+* Once in about a dozen runs the logon is still lost on the way to VTAM and
+  the NCP ends up declaring the PU failed (`IST619I`). Starting `run.sh` again
+  clears it.
 * `run.sh` activates the line 57 seconds after starting MAME, because the
   A91 has to answer the call first. On a machine that cannot run the A91 at
   full speed, give it more time with `ACT_DELAY`.
-* The whole chain was only run on Linux.
+
+## On Windows
+
+The Windows pack runs the same chain natively, without WSL and without Visual
+Studio. `windows/` has what builds it:
+
+* Hercules is the Windows build that comes with TK5 (4.9.1, Visual Studio
+  2008, 64 CPUs, in `hercules/windows/64`). Only its 3705 module,
+  `hdt3705.dll`, is replaced: `build-windows.sh` compiles the patched
+  `comm3705.c` with MinGW against the Hercules 4.9.1 headers and links it to
+  TK5's DLLs and to the same `MSVCR90.dll`. GCC ignores
+  `__declspec(align(n))`, so the headers' `__ALIGN` becomes
+  `__attribute__((aligned(n)))`; without it `DEVBLK` and `SYSBLK` come out
+  smaller and Hercules refuses the module.
+* The 3705 emulator is compiled with the MSYS2 POSIX runtime and three
+  stand-ins in `windows/shim/`: `epoll` on top of `poll`, a curses that does
+  nothing (only the optional line panel uses it) and `SYS_gettid`.
+  `msys-2.0.dll` finds its root by dropping `\usr\bin` from its own path, so
+  the 3705 goes in `i3705\usr\bin\`, next to `i3705\dev\shm` and `i3705\tmp`.
+* Both ask Windows for a 1 ms timer (`windows/shim/hires.c`). The 3705 waits
+  with `usleep()` of microseconds, and with the default 15.6 ms tick every SNA
+  request took 2.5 s instead of 0.4 s.
+* Whatever listens on more than 127.0.0.1 makes Windows ask about its
+  firewall. `windows/tk5-localhost.sh` moves TK5's console port, card reader
+  and 2703 lines to 127.0.0.1, and leaves out its web server and the two CTCT
+  devices, which take no address.
+
+Steps:
+
+1. On Linux or WSL, run `prepare.sh` and `setup-tk5.sh` as above, then
+   `windows/tk5-localhost.sh work/mvs-tk5`, and copy `work/mvs-tk5` to Windows.
+2. On Windows, with MSYS2 in `C:\msys64` (packages `mingw-w64-x86_64-gcc` and
+   `gcc`), Git and Python, in Git Bash:
+   `windows/build-windows.sh /path/to/mvs-tk5`. It writes `work/windows`.
+3. In PowerShell, with `TK5` pointing at that copy and `A91_MAME`,
+   `A91_ROMPATH` and `A91_DISKS` as for `run.sh`:
+   `powershell -ExecutionPolicy Bypass -File windows\run-windows.ps1`.
+   `LUA` and `KEEP` work as in `run.sh`.
+
+TK5's Hercules needs Microsoft's 64-bit Visual C++ 2008 runtime.
 
 ## Files
 
@@ -174,3 +257,8 @@ localhost. `run.sh` reads that address from the 3705's log.
 | `tk5jobs.py` | builds the setup, NCP stage 2 and `N16A` jobs from members punched out of MVS |
 | `jcl/ncpgen1.jcl` | NCP stage 1 for `N16A` |
 | `tso-logon.lua` | logs on to TSO and runs `LISTCAT` without a window |
+| `patches/` | the patches to the 3705 emulator and its `comm3705.c` |
+| `windows/build-windows.sh` | builds the Windows 3705 module and emulator |
+| `windows/run-windows.ps1` | `run.sh` for Windows |
+| `windows/tk5-localhost.sh` | keeps TK5 on 127.0.0.1 |
+| `windows/shim/`, `windows/mingw_shim.h` | the stand-ins for the Windows builds |

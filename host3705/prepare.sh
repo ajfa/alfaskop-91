@@ -1,6 +1,7 @@
 #!/bin/bash
-# prepare.sh <mvs-tk5.zip> - build the IBM 3705 emulator and Hercules 4.6 with its comm3705.c, unpack TK5
-# and give it the NCP volume and the channel-attached 3705 at 660. Everything goes under $WORK.
+# prepare.sh <mvs-tk5.zip> - build the IBM 3705 emulator and Hercules 4.6 with its comm3705.c, both with the
+# patches in patches/, unpack TK5 and give it the NCP volume and the channel-attached 3705 at 660.
+# Everything goes under $WORK.
 set -e
 . "$(dirname "$0")/common.sh"
 ZIP=${1:?usage: prepare.sh /path/to/mvs-tk5.zip}
@@ -10,6 +11,11 @@ mkdir -p "$WORK"
 if [ ! -x "$I3705/BIN/i3705" ]; then
 	git clone -q https://github.com/snhstq/IBM3705_R5.git "$I3705"
 	git -c advice.detachedHead=false -C "$I3705" checkout -q "$I3705_COMMIT"
+	# the channel and line fixes, the length-prefixed READ (both ends) and the fixed line address
+	python3 "$HERE/patches/i3705-line-address.py" "$I3705/I3705/i3705_lib.c" "$I3705/I3705/i3705_chan_T2.c"
+	python3 "$HERE/patches/channel-races.py" "$I3705/I3705/i3705_chan_T2.c" "$I3705/I3705/i3705_lib.c" \
+		"$I3705/Hercules files/comm3705.c"
+	python3 "$HERE/patches/read-length.py" "$I3705/I3705/i3705_chan_T2.c" "$I3705/Hercules files/comm3705.c"
 	make -C "$I3705" i3705 > "$WORK/build-i3705.log" 2>&1
 fi
 echo "i3705: $(ls "$I3705/BIN/i3705")"
@@ -31,9 +37,9 @@ cp -n "$I3705/Hercules files/ncpssp.3350" "$TK5/dasd/"
 cfg=$TK5/conf/tk5_default.cnf
 if ! grep -q "^0660 3705 adaptip" "$cfg"; then
 	cp "$cfg" "$cfg.orig"
-	# the fake 3705s at 660-66B go and the emulated one takes 660; without debug=yes the NCP load hung at times
+	# the fake 3705s at 660-66B go and the emulated one takes 660
 	sed -i -E 's/^(06[6][0-9A-B] 3705 )/#\1/' "$cfg"
-	sed -i '0,/^#0660 3705/s//0660 3705 adaptip=127.0.0.1 port=37051 debug=yes\n#0660 3705/' "$cfg"
+	sed -i '0,/^#0660 3705/s//0660 3705 adaptip=127.0.0.1 port=37051\n#0660 3705/' "$cfg"
 fi
 grep -q "ncpssp.3350" "$TK5/conf/local.cnf" || printf '#\n# IBM3705_R5 NCP volume\n#\n0244 3350 dasd/ncpssp.3350\n' >> "$TK5/conf/local.cnf"
 grep -n "^0660\|^0244" "$cfg" "$TK5/conf/local.cnf"
