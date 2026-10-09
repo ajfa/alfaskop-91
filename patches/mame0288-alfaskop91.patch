@@ -3987,7 +3987,7 @@ index 8dfe4749..d70607a9 100644
 +	{
 +		static unsigned fails = 0;
 +		if ((fails++ % 500) == 0)
-+			logerror("SS3 -> CP sin entregar (intento %u, %02X %02X %02X %02X)\n", fails,
++			logerror("SS3 -> CP not delivered (try %u, %02X %02X %02X %02X)\n", fails,
 +					 m_q_to_cp.front()[0], m_q_to_cp.front()[1], m_q_to_cp.front()[2], m_q_to_cp.front()[3]);
 +		m_ss3_to_cp_timer->adjust(attotime::from_msec(2));
 +		return;
@@ -4095,7 +4095,7 @@ index 8dfe4749..d70607a9 100644
 +	{
 +		static unsigned fails = 0;
 +		if ((fails++ % 500) == 0)
-+			logerror("SS3 -> DU sin entregar (rc=%d, intento %u, %02X %02X %02X %02X)\n",
++			logerror("SS3 -> DU not delivered (rc=%d, try %u, %02X %02X %02X %02X)\n",
 +					 rc, fails, m_q_to_du.front()[0], m_q_to_du.front()[1], m_q_to_du.front()[2], m_q_to_du.front()[3]);
 +		m_ss3_to_du_timer->adjust(attotime::from_msec(2));
 +		return;
@@ -4131,7 +4131,7 @@ index 8dfe4749..d70607a9 100644
 +	{
 +		static unsigned fails = 0;
 +		if ((fails++ % 500) == 0)
-+			logerror("SS3 -> FD sin entregar (rc=%d, intento %u, %02X %02X %02X %02X)\n",
++			logerror("SS3 -> FD not delivered (rc=%d, try %u, %02X %02X %02X %02X)\n",
 +					 rc, fails, m_q_to_fd.front()[0], m_q_to_fd.front()[1], m_q_to_fd.front()[2], m_q_to_fd.front()[3]);
 +		m_ss3_to_fd_timer->adjust(attotime::from_msec(2));
 +		return;
