@@ -3160,7 +3160,7 @@ index 8dfe4749..d70607a9 100644
 +				head = (head + 1) & 3;
 +				count--;
 +				if ((++dropped % 50) == 1)
-+					osd_printf_error("ss3_queue -> %s: cola llena, trama descartada (%u en total)\n",
++					osd_printf_error("ss3_queue -> %s: queue full, frame dropped (%u in all)\n",
 +							 name, dropped);
 +			}
 +			int const t = (head + count) & 3;
@@ -3396,7 +3396,7 @@ index 8dfe4749..d70607a9 100644
 +							return memregion("roms")->base()[0x0ff8 + offset];
 +						offs_t const src = 0x01e8 + (level << 1);
 +						if (!machine().side_effects_disabled())
-+							LOGIRQ("Vector fetch: irq %02x mask %d ==> I%d, vector en RWM %04X\n",
++							LOGIRQ("Vector fetch: irq %02x mask %d ==> I%d, vector in RWM %04X\n",
 +								   m_irq, m_imsk, level, src);
 +						return m_ram[src + offset];
 +					}));
@@ -3414,7 +3414,7 @@ index 8dfe4749..d70607a9 100644
 +						if (m_maincpu->pcbase() < 0x8000 && m_ram[0x01fa] != 0xaa)
 +						{
 +							if (!machine().side_effects_disabled())
-+								LOGIRQ("Vector fetch: SWI ==> vector en RWM 01FA\n");
++								LOGIRQ("Vector fetch: SWI ==> vector in RWM 01FA\n");
 +							return m_ram[0x01fa + offset];
 +						}
 +						return memregion("roms")->base()[0x0ffa + offset];
@@ -3488,7 +3488,7 @@ index 8dfe4749..d70607a9 100644
 +						uint8_t const level = cp_pending_level();
 +						offs_t const src = (level == NO_IRQ) ? 0x7f8 : (0x7e8 + (level << 1));
 +						if (!machine().side_effects_disabled())
-+							LOGIRQ("CP vector fetch: irq %02x mask %d ==> %s en %04X\n",
++							LOGIRQ("CP vector fetch: irq %02x mask %d ==> %s at %04X\n",
 +								   m_cp_irq, m_cp_imsk, level == NO_IRQ ? "default" : "prioritized",
 +								   0xf800 + src);
 +						return memregion("cproms")->base()[src + offset];
@@ -3628,7 +3628,7 @@ index 8dfe4749..d70607a9 100644
 +						uint8_t const level = du_pending_level();
 +						offs_t const src = (level == NO_IRQ) ? 0x7f8 : (0x7e8 + (level << 1));
 +						if (!machine().side_effects_disabled())
-+							LOGIRQ("DU vector fetch: irq %02x mask %d ==> %s en %04X\n",
++							LOGIRQ("DU vector fetch: irq %02x mask %d ==> %s at %04X\n",
 +								   m_du_irq, m_du_imsk, level == NO_IRQ ? "default" : "prioritized",
 +								   0xf800 + src);
 +						return memregion("duroms")->base()[src + offset];
@@ -3918,7 +3918,7 @@ index 8dfe4749..d70607a9 100644
 +	if (rc != 0 || m_ss3_polls < 6)
 +		LOGADLC("SS3 poll %u -> %02X %02X %02X %02X (%s)\n", m_ss3_polls,
 +				m_ss3_last[0], m_ss3_last[1], m_ss3_last[2], m_ss3_last[3],
-+				rc == 0 ? "aceptada" : rc == -2 ? "receptor en reset" : "ADLC ocupado");
++				rc == 0 ? "accepted" : rc == -2 ? "receiver in reset" : "ADLC busy");
 +	if ((m_ss3_polls % 100) == 0)
 +		LOGADLC("SS3 t=%.1f s: PC=%04X (%s)\n", machine().time().as_double(),
 +				m_maincpu->pc(), m_maincpu->pc() < 0x8000 ? "RWM - programa cargado" : "PROM");
@@ -3933,7 +3933,7 @@ index 8dfe4749..d70607a9 100644
 +	std::string s;
 +	for (int i = 0; i < length && i < 32; i++)
 +		s += util::string_format("%02X ", data[i]);
-+	logerror("*** SS3 RESPUESTA de %d bytes: %s  (al poll %02X %02X %02X %02X)\n",
++	logerror("*** SS3 REPLY of %d bytes: %s  (to poll %02X %02X %02X %02X)\n",
 +			 length, s, m_ss3_last[0], m_ss3_last[1], m_ss3_last[2], m_ss3_last[3]);
 +
 +	// The FDA modem drops CTS when the line goes idle after the closing flag;
