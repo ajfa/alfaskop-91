@@ -1,0 +1,247 @@
+ALFASKOP 91 + DU 4110 (Ericsson, 1988) - pack for @OS@
+@ULINE@
+
+What it is
+----------
+An Ericsson Alfaskop System 91 terminal controller (68000, pSOS) with a
+DU 4110 display unit and its keyboard, emulated in MAME (@EXE@, a build of
+MAME 0.288 with the A91 driver, inside the pack@LIBS@: nothing needs to be
+installed@DESKTOP@).
+
+The diskettes are the three that Mattis Lind read from his own A91:
+  A91R4A_1.IMD  A91 system, version V5.6-4A, 10 June 1988
+  A91R4A_2.IMD  emulation "ALFASKOP 91 Single Line IBM 3270 SNA switch 5.6H"
+  A91SETUP.IMD  another system diskette, version M5.06-02 (1988)
+
+The A91 is a 3270 controller that connects over switched X.21 (the Datex
+network) to an IBM mainframe running SNA. There is no mainframe here: the
+emulator carries a minimal "host" that calls the A91 over X.21, brings up the
+SDLC link and the SNA session, and sends it a 3270 screen that echoes what is
+typed. Everything else (the A91, the DU, the keyboard, the diskettes) is the
+original software, untouched.
+
+With START-A91-MAINFRAME the A91 connects instead to a real emulated IBM
+mainframe, and the DU logs on to TSO: see "With a real IBM mainframe".
+
+
+How to start it (step by step)
+------------------------------
+1. @STEP1@
+   A black window opens (not full screen): it is the screen of the DU.
+   Below it there is a grey strip with two red digits: the display of the
+   A91's front panel (see "The A91 panel" below).
+
+2. From 0 to about 50 seconds: "!LOAD" at the bottom left.
+   The A91 is reading the diskettes and starting. Nothing needs to be done.
+   Meanwhile the panel digits count through the boot and then blink.
+
+3. At about 55 seconds: "!*OS*" at the bottom.
+   The DU has received its program over the A91's bus.
+
+4. At about 65 seconds, in the middle of the screen:
+       ********** A U T O L O G O N **********
+   The DU introduces itself. Still nothing to do.
+
+5. At about 85 seconds the host screen appears:
+       ALFASKOP 91 HOST - SNA OVER X.21 - EMULATED HOST AT DIAL NUMBER 100852
+       SESSION BOUND. THE A91 ANSWERED ACTPU, ACTLU, BIND AND SDT.
+       TYPE HERE:
+   and at the bottom the status line:  !EMA01A MY JOB      PR04      SNSW 007/013
+   It is now in a 3270 session.
+
+6. Type something after TYPE HERE: and press Enter.
+   The host answers on the same screen:
+       LAST KEY: ENTER
+       YOU TYPED: (what was typed)
+   With F1 to F12 it answers LAST KEY: PF1 ... PF12, and so on for the rest.
+
+The times are at normal speed; a slow PC takes somewhat longer.
+
+
+With a real IBM mainframe (TSO on MVS)
+--------------------------------------
+START-A91-MAINFRAME@EXT@ connects the A91, instead of to the minimal host, to a
+whole emulated IBM mainframe:
+  - an IBM 3705 communications controller running IBM's NCP network program
+    (emulator by Edwin Freekenhorst and Henk Stegeman);
+  - a mainframe with MVS 3.8j, VTAM and TSO (TK5, by Rob Prins) on Hercules.
+The A91 calls, the NCP activates it, VTAM sends it its logon screen, and from
+the DU 4110 you log on to TSO with a user and password, as in 1988.
+@REQ@
+Everything is inside the pack (folder mainframe@SEP@). The 3705 and MVS have no
+window: their messages go to mainframe@SEP@log.
+
+Step by step:
+
+1. @STEP1MF@
+   A text window opens and reports what is happening. Nothing needs to be
+   typed in it.
+     "Starting the 3705 and MVS, about 2 minutes."   MVS IPL: about 45 s
+     "MVS is up. Loading the NCP into the 3705"       NCP load: 1 minute
+     "NCP loaded. Opening the Alfaskop 91."
+   After 2 minutes the A91 window opens, as in the normal mode.
+
+2. The A91 starts as always: !LOAD, !*OS*, AUTOLOGON (about 65 s).
+   About a minute into the A91 window, the text window says
+     L16A20 active / P16A20A active / T16A20A1 active
+   and on the DU the status line changes to  !EMA01A SYS OP
+   That is the VTAM logon screen. At the top it says once or twice
+     UNSUPPORTED FUNCTION
+   which is not an error (see below).
+
+3. Type:  LOGON APPLID(TSO) LOGMODE(MHP3278E)   and press Enter.
+   The status line changes to  MY JOB  and a few seconds later an X and the
+   number 443 appear:  MY JOB    X       443   with an empty screen.
+   TSO has asked the DU what it can do, and the DU does not answer that
+   question. Nothing is wrong.
+
+4. Press left Ctrl (RESET): the X goes away. Press F3 (PF3).
+   Between 30 s and 1 minute later
+     IKJ56700A ENTER USERID -
+   appears. If an X shows again in the meantime (443 or C01), RESET and F3 again.
+
+5. Type  HERC01  and Enter.  ENTER CURRENT PASSWORD FOR HERC01-  appears.
+   Type  CUL8TR  and Enter.
+
+6. 5 to 30 s later: HERC01 LOGON IN PROGRESS, the box
+     Welcome to the TSO system on TK5R
+   and  ***  at the bottom. Press Enter.
+
+7. A drawing of a cat and a sentence (the "fortune cookie") appear with ***.
+   Here press Page Up (PA1), NOT Enter: Enter would open TK5's ISPF menu,
+   which is in colour, and the DU 4110 has no colours (see below).
+   ! *  and  READY  appear.
+
+8. You are in TSO. For example:
+     LISTCAT        lists the files of user HERC01
+     TIME           (answers only READY on this system)
+     LOGOFF         ends the session; the VTAM screen comes back (step 3)
+
+9. To finish, close the A91 window. The text window shuts down MVS and the
+   3705 by itself (about 30 s) and closes. If the text window was closed
+   first, STOP@EXT@ closes everything of this pack.
+
+What may look alarming in this mode and is not an error:
+- UNSUPPORTED FUNCTION on the VTAM screen: the A91 tells VTAM that the DU has
+  loaded (NOTIFY), and this version of VTAM does not know that message.
+- X 443 right after typing LOGON: it is the TSO question the DU does not
+  answer. RESET and F3.
+- UNOWNED for a moment after LOGON: the program that takes the logons hands
+  the session to the user's TSO. If X C01 shows afterwards, RESET and F3.
+- If Enter is pressed at the fortune cookie: X 470 and the message
+  IKT00405I SCREEN ERASURE CAUSED BY ERROR RECOVERY PROCEDURE again and
+  again. It is the ISPF menu in colour. Press Page Up (PA1) and READY comes.
+- The sides of the welcome box show as $: the DU uses the Swedish character
+  set and that code is another letter in TK5's.
+- If the text window says something "did not become active", close the A91
+  window and start again: every start does a fresh IPL of MVS.
+
+
+The keyboard
+------------
+The DU has a Swedish Ericsson keyboard. The PC keys map by position:
+
+  Letters and digits       in their places
+  Shift + 1 2 3 4 ...      ! " # $ % & / ( ) =   (4 gives the currency sign,
+                                                  which this screen draws as $)
+  key right of 0           + ?
+  the next one             e with accent (é É)
+  key right of P           å Å
+  the next one             ü ^
+  key right of L           ö Ö
+  the next one             ä Ä
+  key next to Enter        ' *
+  key left of Z            < >
+  , . and the one right    , ;   . :   - _
+
+  Enter                    ENTER (sends the screen to the host)
+  keypad Enter             NEW LINE (to the first field of the next line)
+  Tab                      next field
+  Arrows                   move the cursor
+  Backspace                cursor left (as on a 3270)
+  Home                     cursor to the start
+  Delete                   deletes the character
+  Insert                   insert mode
+  End                      CLEAR (clears the screen and tells the host)
+  left Ctrl                RESET (unlocks the keyboard when an X shows)
+  F1 to F12                PF1 to PF12
+  Shift + F1 to F12        PF13 to PF24
+  Page Up / Page Down      PA1 / PA2  (PA3 has no key on the PC)
+  Print Screen             print (see below)
+  Caps Lock                shift lock (released with Shift, as on a
+                           typewriter)
+  left Alt                 Alt of the Ericsson keyboard
+  Alt + `                  DEV CNCL (` is the key at the top left, under Esc)
+
+The PC keys go straight to the DU. To reach MAME's menu (for example to
+change a key): Scroll Lock and then Tab. Scroll Lock again to go back to the
+DU keyboard.
+
+
+The A91 panel
+-------------
+The two red digits under the screen are the display of the controller's front
+panel. In a normal boot it shows:
+  03 04 05             ROM self test, the first second
+  06 07 ... 20 30 00   system load from the diskette, up to 20 s
+  60 61 50 51          boot status codes, one after another, each one second
+                       on and one off, from 20 to 50 s
+  00                   everything running
+The panel drawing is deduced from the A91's code, which sends two decimal
+digits; it is not copied from photographs of the unit.
+
+
+What may look alarming and is not an error
+------------------------------------------
+- The panel digits blinking between 20 and 50 seconds (60, 61, 50, 51): they
+  are boot status codes, not errors. At the end it stays at 00.
+- The "!" at the start of the status line is always there: it is a normal
+  DU indicator.
+- "!LOAD" for almost a minute: it is the load from diskette.
+- Print Screen: as there is no printer, "X   PR FAILURE" appears on the status
+  line and the keyboard locks. Alt + ` (DEV CNCL) clears it.
+- Alt + Print Screen asks "ASSIGN A PR  04": it is the printer assignment.
+  Enter keeps the one there was (04) and everything returns to normal.
+- The currency sign shows as $: the character set of this DU 4110 has $ at
+  that code.
+
+
+The SETUP diskette
+------------------
+START-SETUP-DISK@EXT@ starts the A91 with the A91SETUP diskette. It reaches a
+screen "Alfaskop 91 Customer Setup Test / Test that the keyboard works" with
+a manual load line at the bottom:  MAN V:  L:  M/F:  M:
+That diskette carries its configuration program for the Alfaskop 9014 (VGA)
+display, not for the DU 4110: with the 4110 you can only check that the
+keyboard types on that line. If you try to load something (for example the
+library D7GCSU), the DU hangs: close the window and start again.
+
+
+How to close it
+---------------
+Close the window with the X, at any time. The A91 has no shutdown command and
+no open file system that could be damaged, and a normal session writes
+nothing to the diskettes (checked: they stay identical).
+
+STOP@EXT@ is only needed if the window hangs.
+
+The diskettes in use are in the folder disks@SEP@. The originals are in
+disks@SEP@originals and are never touched. RESET-DISKS@EXT@ closes the emulator
+and copies the originals over the working ones again.
+
+
+The files
+---------
+  START-A91@EXT@            the A91 with the R4A diskettes and the host
+  START-SETUP-DISK@EXT@     the A91 with the SETUP diskette
+  START-A91-MAINFRAME@EXT@  the A91 connected to the IBM mainframe (3705 + MVS)
+  mainframe@SEP@                the 3705, Hercules and MVS (TK5); mainframe@SEP@log their messages
+  RESET-DISKS@EXT@          restores the working diskettes
+  STOP@EXT@                 closes the emulator if it hung
+  @EXE@@EXEPAD@                MAME 0.288 with the A91 driver
+@LIBLINE@  roms@SEP@                    ROMs of the A91, the DU 4110 and the keyboard
+  disks@SEP@originals@SEP@         the three diskettes as they came
+  snapshots@SEP@                snapshots go here: Scroll Lock, F12, Scroll Lock
+
+Mattis Lind read the ROMs and the diskettes from his own unit; the sources of
+everything in this pack are at https://github.com/ajfa/alfaskop-91
