@@ -1,0 +1,110 @@
+From e2ea67559f7474dfd6106ea972c922e146b6d9f3 Mon Sep 17 00:00:00 2001
+From: ajfa <3520832+ajfa@users.noreply.github.com>
+Date: Fri, 9 Oct 2026 10:42:09 -0600
+Subject: [PATCH 2/2] a91: master API (output finders, std::popcount); English
+ log strings
+
+---
+ src/mame/ericsson/a91.cpp          |  4 ++--
+ src/mame/ericsson/alfaskop41xx.cpp | 14 +++++++-------
+ 2 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/src/mame/ericsson/a91.cpp b/src/mame/ericsson/a91.cpp
+index c858dcc9..3b7c15b1 100644
+--- a/src/mame/ericsson/a91.cpp
++++ b/src/mame/ericsson/a91.cpp
+@@ -50,6 +50,7 @@
+ 
+ #include "a91du.lh"
+ 
++#include <bit>
+ #include <deque>
+ 
+ #define LOG_SS3 (1U << 1)
+@@ -309,7 +310,6 @@ private:
+ 
+ void a91_state::machine_start()
+ {
+-	m_digits.resolve();
+ 	save_item(NAME(m_boot_vectors));
+ 	save_item(NAME(m_fdc_irq));
+ 	save_item(NAME(m_pgcr));
+@@ -1051,7 +1051,7 @@ int a91_state::line2_next_rbit()
+ 		u8 const c = m_l2_rxq.front() & 0x7f;
+ 		m_l2_rxq.pop_front();
+ 		// odd parity in bit 7
+-		m_l2_rsr = c | ((population_count_32(c) & 1) ? 0 : 0x80);
++		m_l2_rsr = c | ((std::popcount(c) & 1) ? 0 : 0x80);
+ 		m_l2_rbits = 8;
+ 		m_l2_idle = 0;
+ 	}
+diff --git a/src/mame/ericsson/alfaskop41xx.cpp b/src/mame/ericsson/alfaskop41xx.cpp
+index b4f09143..18a7fef5 100644
+--- a/src/mame/ericsson/alfaskop41xx.cpp
++++ b/src/mame/ericsson/alfaskop41xx.cpp
+@@ -453,7 +453,7 @@ private:
+ 				head = (head + 1) & 3;
+ 				count--;
+ 				if ((++dropped % 50) == 1)
+-					osd_printf_error("ss3_queue -> %s: cola llena, trama descartada (%u en total)\n",
++					osd_printf_error("ss3_queue -> %s: queue full, frame dropped (%u in all)\n",
+ 							 name, dropped);
+ 			}
+ 			int const t = (head + count) & 3;
+@@ -700,7 +700,7 @@ void alfaskop4120_state::mem_map(address_map &map)
+ 							return memregion("roms")->base()[0x0ff8 + offset];
+ 						offs_t const src = 0x01e8 + (level << 1);
+ 						if (!machine().side_effects_disabled())
+-							LOGIRQ("Vector fetch: irq %02x mask %d ==> I%d, vector en RWM %04X\n",
++							LOGIRQ("Vector fetch: irq %02x mask %d ==> I%d, vector in RWM %04X\n",
+ 								   m_irq, m_imsk, level, src);
+ 						return m_ram[src + offset];
+ 					}));
+@@ -718,7 +718,7 @@ void alfaskop4120_state::mem_map(address_map &map)
+ 						if (m_maincpu->pcbase() < 0x8000 && m_ram[0x01fa] != 0xaa)
+ 						{
+ 							if (!machine().side_effects_disabled())
+-								LOGIRQ("Vector fetch: SWI ==> vector en RWM 01FA\n");
++								LOGIRQ("Vector fetch: SWI ==> vector in RWM 01FA\n");
+ 							return m_ram[0x01fa + offset];
+ 						}
+ 						return memregion("roms")->base()[0x0ffa + offset];
+@@ -792,7 +792,7 @@ void alfaskop4120_state::cp_mem_map(address_map &map)
+ 						uint8_t const level = cp_pending_level();
+ 						offs_t const src = (level == NO_IRQ) ? 0x7f8 : (0x7e8 + (level << 1));
+ 						if (!machine().side_effects_disabled())
+-							LOGIRQ("CP vector fetch: irq %02x mask %d ==> %s en %04X\n",
++							LOGIRQ("CP vector fetch: irq %02x mask %d ==> %s at %04X\n",
+ 								   m_cp_irq, m_cp_imsk, level == NO_IRQ ? "default" : "prioritized",
+ 								   0xf800 + src);
+ 						return memregion("cproms")->base()[src + offset];
+@@ -932,7 +932,7 @@ void alfaskop4120_state::du_mem_map(address_map &map)
+ 						uint8_t const level = du_pending_level();
+ 						offs_t const src = (level == NO_IRQ) ? 0x7f8 : (0x7e8 + (level << 1));
+ 						if (!machine().side_effects_disabled())
+-							LOGIRQ("DU vector fetch: irq %02x mask %d ==> %s en %04X\n",
++							LOGIRQ("DU vector fetch: irq %02x mask %d ==> %s at %04X\n",
+ 								   m_du_irq, m_du_imsk, level == NO_IRQ ? "default" : "prioritized",
+ 								   0xf800 + src);
+ 						return memregion("duroms")->base()[src + offset];
+@@ -1462,7 +1462,7 @@ TIMER_CALLBACK_MEMBER(alfaskop4120_state::ss3_poll)
+ 	if (rc != 0 || m_ss3_polls < 6)
+ 		LOGADLC("SS3 poll %u -> %02X %02X %02X %02X (%s)\n", m_ss3_polls,
+ 				m_ss3_last[0], m_ss3_last[1], m_ss3_last[2], m_ss3_last[3],
+-				rc == 0 ? "aceptada" : rc == -2 ? "receptor en reset" : "ADLC ocupado");
++				rc == 0 ? "accepted" : rc == -2 ? "receiver in reset" : "ADLC busy");
+ 	if ((m_ss3_polls % 100) == 0)
+ 		LOGADLC("SS3 t=%.1f s: PC=%04X (%s)\n", machine().time().as_double(),
+ 				m_maincpu->pc(), m_maincpu->pc() < 0x8000 ? "RWM - programa cargado" : "PROM");
+@@ -1477,7 +1477,7 @@ void alfaskop4120_state::ss3_frame_from_unit(uint8_t *data, int length)
+ 	std::string s;
+ 	for (int i = 0; i < length && i < 32; i++)
+ 		s += util::string_format("%02X ", data[i]);
+-	logerror("*** SS3 RESPUESTA de %d bytes: %s  (al poll %02X %02X %02X %02X)\n",
++	logerror("*** SS3 REPLY of %d bytes: %s  (to poll %02X %02X %02X %02X)\n",
+ 			 length, s, m_ss3_last[0], m_ss3_last[1], m_ss3_last[2], m_ss3_last[3]);
+ 
+ 	// The FDA modem drops CTS when the line goes idle after the closing flag;
+-- 
+2.34.1
+

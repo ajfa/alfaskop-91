@@ -45,13 +45,15 @@ included here.
 
 ## Ericsson material
 
-**No Ericsson firmware, ROM image, diskette image or documentation is included
-in this repository.**
-
 The Alfaskop 91 and the Alfaskop System 41 hardware, firmware and software are
 the work of Ericsson Information Systems AB. References to part numbers,
 addresses, register layouts and observed behaviour are descriptions of a
 historical system, made for interoperability and preservation.
 
-To run the emulation you need the ROM set and the diskette images, obtained
-separately.
+The ROM images in `roms/` and the diskette images and photographs in `media/`
+are **not** covered by the BSD-3-Clause license of this repository; their
+rights stay with their holders. They are included for preservation and so that
+the emulation can be run and checked. They were dumped, read and photographed
+by **Mattis Lind** and **Poul-Henning Kamp**, as `roms/SOURCES.md` and
+`media/README.md` set out file by file. If you hold rights to any of this
+material and want it removed, please open an issue.

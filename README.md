@@ -64,9 +64,16 @@ driver/a91.cpp, driver/a91du.lay    the driver and the panel layout, as plain fi
 tools/                              Lua probes and Python tools used for the work
 docs/NOTES.md                       hardware and firmware notes
 host3705/                           the A91 on the IBM 3705 emulator, Hercules and MVS: scripts and steps
+roms/                               the ROM set, MAME layout, with SOURCES.md
+media/                              diskette images and photographs, by who read them, with README.md
+pack/                               the scripts that build the Linux and Windows packs
+patches/mame-master/                the same work ported to MAME's master branch
 ```
 
-No Ericsson firmware, ROM or diskette image is included. See [NOTICE.md](NOTICE.md).
+The ROMs and diskette images were dumped by Mattis Lind and Poul-Henning Kamp;
+[roms/SOURCES.md](roms/SOURCES.md) and [media/README.md](media/README.md) say
+who made each one and when. They are Ericsson's software and are not under this
+repository's license: see [NOTICE.md](NOTICE.md).
 
 ## Building
 
@@ -86,22 +93,15 @@ DU 4110 and its keyboard come from that driver.
 
 ## Running
 
-ROMs, with MAME's names, in `roms/a91/`:
-
-| file | what it is |
-|---|---|
-| `e34058709112202.bin`, `e34058709112302.bin` | the A91 boot ROM, even and odd byte |
-| `e3405870205201.bin` | DU 4110 IPL PROM (DTC-A IC52) |
-| `e3405972067500.bin`, `e3405972067600.bin` | DU 4110 character generator (DTC-A IC75, IC76) |
-
-and in `roms/alfaskop_s41_kb/` the keyboard's `kbc_e34066_0000_ic3.bin` and
-`kbc_e34066_0000_ic4_e3405970280400.bin`.
+The ROM set is in `roms/` and the diskettes in `media/mattis-lind/`. Copy the
+two R4A diskettes first, because the originals should stay as they came:
 
 ```sh
+cp media/mattis-lind/A91R4A_1.IMD media/mattis-lind/A91R4A_2.IMD .
 ./a91 a91du -rompath roms -flop1 A91R4A_1.IMD -flop2 A91R4A_2.IMD -window -nomaximize -skip_gameinfo
 ```
 
-Work on copies of the diskette images; a normal session leaves them unchanged.
+A normal session leaves the copies unchanged.
 
 The status line shows `!LOAD` while the A91 reads the diskettes, `!*OS*` when
 the display unit has its system, then the `AUTOLOGON` banner, and the host
@@ -227,13 +227,17 @@ boot.
   preservation work with real hardware. The DU 4110 and keyboard ROMs are under
   `hardware/DU4110`.
 
-The A91 boot ROM and the three diskettes were dumped by Mattis Lind from his own
-unit. As far as we know they are not published.
+The A91 boot ROM and the diskettes in `media/mattis-lind/` were dumped by
+Mattis Lind from his own unit and diskettes, and the 5-inch and 8-inch sets in
+`media/poul-henning-kamp/` were read by Poul-Henning Kamp. This repository
+publishes them with that credit.
 
 ## Credits
 
 Mattis Lind for the A91 hardware, the EPROM dumps, the diskette images and the
-first version of the driver, and for pointing at the 3705 emulator. Joakim
+first version of the driver, and for pointing at the 3705 emulator.
+Poul-Henning Kamp and Datamuseum.dk for the 5-inch and 8-inch diskette images
+and the photographs. Joakim
 Larsson Edström for the Alfaskop driver in MAME that the display unit is built
 on. Edwin Freekenhorst and Henk Stegeman for the IBM 3705 emulator, Rob Prins
 for TK5, and the Hercules developers.

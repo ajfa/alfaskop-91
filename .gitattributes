@@ -1,1 +1,3 @@
 * text=auto eol=lf
+media/** -text
+roms/** -text
