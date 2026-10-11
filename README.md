@@ -91,6 +91,15 @@ The patch also carries the Alfaskop System 41 driver work from
 [alfaskop-system41](https://github.com/ajfa/alfaskop-system41), because the
 DU 4110 and its keyboard come from that driver.
 
+The same work for MAME's master branch is in `patches/mame-master/`, made on
+master commit `a0edb952` (9 October 2026); apply it with `git am`.
+
+## Packs
+
+`pack/` builds self-contained folders for Linux and Windows with the emulator,
+the ROMs, the diskettes, launchers, a step-by-step README and the mainframe
+mode. See [pack/README.md](pack/README.md).
+
 ## Running
 
 The ROM set is in `roms/` and the diskettes in `media/mattis-lind/`. Copy the
